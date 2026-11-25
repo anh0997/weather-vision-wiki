@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>惡劣天氣下，AI 為什麼看不清楚？</title>
+<meta name="description" content="由 LLM Wiki 產生的教學簡報：惡劣天氣如何影響物件偵測，以及四種對策。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1419; --stage:#121b22; --panel:#1a252e; --line:#2b3a46;
+  --text:#e8eef2; --muted:#93a4b0; --accent:#ffb547; --rain:#5ec2ff; --fog:#b8c4cc;
+  --good:#4fe0a0; --bad:#ff6f61; --night:#8b7bff;
+  --font:"Noto Sans TC",system-ui,"Microsoft JhengHei",sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden}
+#viewport{position:fixed;top:8px;left:0;right:0;bottom:56px;display:grid;place-items:center}
+#deck{width:1280px;height:720px;position:relative;transform-origin:center center}
+.slide{position:absolute;inset:0;background:var(--stage);border:1px solid var(--line);border-radius:14px;padding:56px 72px 64px;
+  display:none;flex-direction:column;overflow:hidden}
+.slide.on{display:flex;animation:in .35s ease}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.kicker{font:700 15px var(--mono);color:var(--accent);letter-spacing:.06em;margin:0 0 10px}
+h1{font-size:56px;line-height:1.2;margin:0 0 18px;font-weight:900}
+h2{font-size:40px;line-height:1.25;margin:0 0 22px;font-weight:900}
+h3{font-size:24px;margin:0 0 8px}
+p,li{font-size:23px;line-height:1.6}
+.lead{font-size:26px;color:var(--muted);margin:0 0 20px}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+dfn{font-style:normal;border-bottom:2px dotted var(--accent);cursor:help}
+.small{font-size:17px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.card h3{display:flex;gap:10px;align-items:center}
+.card p{font-size:19px;margin:6px 0 0;line-height:1.5}
+.tag{display:inline-block;font:700 13px var(--mono);padding:3px 8px;border-radius:5px;background:var(--line);color:var(--muted)}
+.big{font:900 64px/1 var(--mono);color:var(--accent)}
+.callout{border-left:5px solid var(--accent);background:rgba(255,181,71,.08);padding:14px 20px;border-radius:0 10px 10px 0;font-size:22px}
+.callout.bad{border-color:var(--bad);background:rgba(255,111,97,.08)}
+.callout.good{border-color:var(--good);background:rgba(79,224,160,.08)}
+.eq{font:700 30px var(--mono);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 22px;display:inline-block}
+ul.clean{list-style:none;padding:0;margin:0}
+ul.clean li{padding-left:30px;position:relative;margin:6px 0}
+ul.clean li::before{content:"▸";position:absolute;left:4px;color:var(--accent)}
+table{border-collapse:collapse;width:100%;font-size:20px}
+th,td{border-bottom:1px solid var(--line);padding:9px 12px;text-align:left}
+th{color:var(--muted);font-weight:500;font-size:16px}
+td.num{font-family:var(--mono);text-align:right}
+/* 長條圖 */
+.bars{display:grid;gap:10px}
+.bar{display:grid;grid-template-columns:230px 1fr 70px;align-items:center;gap:12px;font-size:19px}
+.bar .track{height:30px;background:var(--panel);border-radius:6px;overflow:hidden}
+.bar .fill{height:100%;width:0;border-radius:6px;background:var(--fog);transition:width .8s ease}
+.bar .v{font-family:var(--mono);text-align:right}
+.bar.good .fill{background:var(--good)} .bar.bad .fill{background:var(--bad)} .bar.base .fill{background:var(--rain)}
+/* 頁尾：Wiki 對應 */
+.src{position:absolute;left:72px;right:72px;bottom:20px;display:flex;justify-content:space-between;font:500 14px var(--mono);color:var(--muted)}
+.src b{color:var(--accent);font-weight:700}
+/* 揭曉 */
+.reveal{opacity:0;transition:opacity .3s}
+.reveal.show{opacity:1}
+button.btn{font:700 18px var(--font);background:var(--accent);color:#1a1200;border:0;border-radius:8px;padding:10px 18px;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent);border:2px solid var(--accent)}
+/* 測驗 */
+.quiz .q{margin-bottom:18px}
+.quiz .opts{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.quiz .opts button{font:500 18px var(--font);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+.quiz .opts button.right{background:var(--good);color:#002412;border-color:var(--good)}
+.quiz .opts button.wrong{background:var(--bad);color:#2a0400;border-color:var(--bad)}
+.quiz .why{font-size:17px;color:var(--muted);margin:6px 0 0;min-height:24px}
+/* 霧模擬 */
+.fogscene{width:100%;height:auto;border-radius:12px;border:1px solid var(--line)}
+.betas{display:flex;gap:8px;margin:10px 0}
+.betas button{font:700 16px var(--mono);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer}
+.betas button.on{background:var(--fog);color:#111}
+/* 控制列 */
+#nav{position:fixed;bottom:9px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;z-index:5}
+#nav button{font:700 16px var(--mono);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;width:42px;height:38px;cursor:pointer}
+#count{font:500 14px var(--mono);color:var(--muted);min-width:64px;text-align:center}
+#progress{position:fixed;top:0;left:0;height:4px;background:var(--accent);transition:width .3s;z-index:5}
+#hint{position:fixed;bottom:16px;left:16px;font:12px var(--mono);color:var(--muted)}
+@media (max-width:700px){#hint{display:none}}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="viewport"><div id="deck">
+
+<!-- 1 封面 -->
+<section class="slide" data-wiki="index.md" data-src="">
+  <p class="kicker">// 教學簡報 · 由 LLM Wiki 產生</p>
+  <h1>惡劣天氣下，<br>AI 為什麼看不清楚？</h1>
+  <p class="lead">雨、霧、夜晚如何讓 AI「找東西」的能力變差，以及研究者想出的四條路</p>
+  <div style="margin-top:auto;display:flex;gap:40px;align-items:flex-end">
+    <div><p class="muted small" style="margin:0">講者</p><p style="margin:0">丁國英｜勤益科大 電機碩一乙</p></div>
+    <div><p class="muted small" style="margin:0">知識來源</p><p style="margin:0">惡劣天氣影像辨識 LLM Wiki（6 篇論文）</p></div>
+  </div>
+  <div class="src"><span>按 → 或空白鍵下一頁</span><span>Wiki：<b>index.md</b></span></div>
+</section>
+
+<!-- 2 學習目標 + 先猜 -->
+<section class="slide" data-wiki="index.md" data-src="">
+  <p class="kicker">// 今天會學到</p>
+  <h2>學習目標</h2>
+  <div class="grid2">
+    <ul class="clean">
+      <li>說出雨、霧、夜晚各自「怎麼」讓影像變差</li>
+      <li>知道天氣讓偵測變差了多少</li>
+      <li>比較四條對策路線的優缺點</li>
+      <li>知道怎麼公平地評估「天氣不好時好不好用」</li>
+    </ul>
+    <div class="card">
+      <h3>🤔 先猜猜看</h3>
+      <p style="font-size:22px">下雨天的照片，先用 AI 把雨「去掉」，再交給偵測器，偵測會變得比較準嗎？</p>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn ghost" data-guess="yes">會變準</button>
+        <button class="btn ghost" data-guess="no">不一定</button>
+      </div>
+      <p class="muted small" id="guess-msg" style="min-height:28px"></p>
+    </div>
+  </div>
+  <div class="src"><span>答案在第 8 頁揭曉</span><span>Wiki：<b>index.md</b></span></div>
+</section>
+
+<!-- 3 物件偵測是什麼 -->
+<section class="slide" data-wiki="concepts/weather-effects.md" data-src="">
+  <p class="kicker">// 基礎</p>
+  <h2>AI 是怎麼「看」東西的？</h2>
+  <div class="grid2">
+    <div>
+      <p><dfn title="Object detection：在影像中找出物體的位置（框）並說出它是什麼（類別）">物件偵測</dfn>＝ 在照片裡<strong>框出</strong>物體，並說出它<strong>是什麼</strong>。</p>
+      <p>AI 靠的是從大量照片學到的「特徵」：邊緣、形狀、明暗、顏色。</p>
+      <div class="callout">天氣一變，這些特徵就變了——但 AI 只看過晴天的樣子。</div>
+    </div>
+    <svg viewBox="0 0 520 320" role="img" aria-label="偵測框示意：汽車與行人各被框出並標上類別">
+      <rect x="0" y="0" width="520" height="320" rx="12" fill="#1a252e"/>
+      <rect x="0" y="220" width="520" height="100" fill="#22303b"/>
+      <rect x="70" y="150" width="210" height="90" rx="22" fill="#3a4b58"/>
+      <circle cx="120" cy="242" r="20" fill="#0e1419"/><circle cx="235" cy="242" r="20" fill="#0e1419"/>
+      <rect x="350" y="120" width="34" height="34" rx="17" fill="#3a4b58"/><rect x="345" y="155" width="44" height="80" rx="10" fill="#3a4b58"/>
+      <rect x="60" y="140" width="232" height="126" fill="none" stroke="#4fe0a0" stroke-width="3"/>
+      <rect x="60" y="116" width="92" height="24" fill="#4fe0a0"/><text x="68" y="134" font-family="monospace" font-size="15" font-weight="700" fill="#002412">car</text>
+      <rect x="336" y="110" width="62" height="134" fill="none" stroke="#ffb547" stroke-width="3"/>
+      <rect x="336" y="86" width="92" height="24" fill="#ffb547"/><text x="344" y="104" font-family="monospace" font-size="15" font-weight="700" fill="#1a1200">person</text>
+    </svg>
+  </div>
+  <div class="src"><span>背景知識</span><span>Wiki：<b>C1 天氣如何讓影像變差</b></span></div>
+</section>
+
+<!-- 4 四種天氣 -->
+<section class="slide" data-wiki="concepts/weather-effects.md" data-src="S2 S3 S4 S5 S6">
+  <p class="kicker">// 問題</p>
+  <h2>不同天氣，破壞的東西不一樣</h2>
+  <div class="grid4">
+    <div class="card"><h3>🌫️ 霧</h3><p>光在空氣中散射，<strong>越遠越白</strong>，對比變低。</p><p class="muted small">S5</p></div>
+    <div class="card"><h3>🌧️ 雨</h3><p>雨絲讓畫面<strong>變白、對比下降</strong>；擋風玻璃上的雨滴一直變形。</p><p class="muted small">S4</p></div>
+    <div class="card"><h3>🌙 夜晚</h3><p>整張圖變暗，細節消失；研究用 x<sup>γ</sup> 模擬變暗。</p><p class="muted small">S2</p></div>
+    <div class="card"><h3>❄️ 雪・沙塵</h3><p>真實資料集 DAWN 收錄；沙塵讓某些方法<strong>更難</strong>。</p><p class="muted small">S3 · S6</p></div>
+  </div>
+  <div class="callout" style="margin-top:24px">共同點：偵測器靠的<strong>邊緣與對比</strong>被破壞了，而且<strong>小東西</strong>最先看不見。</div>
+  <div class="src"><span>來源 S2 S3 S4 S5 S6</span><span>Wiki：<b>C1 天氣如何讓影像變差</b></span></div>
+</section>
+
+<!-- 5 霧的公式 + 互動 -->
+<section class="slide" data-wiki="concepts/weather-effects.md sources/S5-foggy-cityscapes.md" data-src="S5">
+  <p class="kicker">// 動手看看</p>
+  <h2>霧有公式：越遠、越濃，就越看不見</h2>
+  <div class="grid2">
+    <div>
+      <div class="eq">I = R·t + L·(1 − t)</div>
+      <p class="small" style="margin-top:10px">I：拍到的影像　R：清晰的場景　L：霧的亮度（大氣光）<br>t = e<sup>−β·距離</sup>：能穿過霧的光的比例</p>
+      <p style="margin-bottom:4px">選一個霧的濃度 <dfn title="衰減係數：霧有多濃，數字越大霧越濃">β</dfn>：</p>
+      <div class="betas" id="betas">
+        <button data-b="0.005">0.005</button><button data-b="0.01">0.01</button><button data-b="0.02">0.02</button><button data-b="0.03">0.03</button><button data-b="0.06">0.06</button>
+      </div>
+      <p>能見度 ≈ 2.996 ÷ β ＝ <span class="big" id="mor" style="font-size:44px">—</span></p>
+      <p class="muted small">研究用這 5 種 β 合成霧，對應能見度約 600、300、150、100、50 m。</p>
+    </div>
+    <svg class="fogscene" id="fogscene" viewBox="0 0 520 360" role="img" aria-label="三台車分別在 50、150、300 公尺處，霧越濃越看不見遠處的車">
+      <defs><filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"/></filter></defs>
+      <rect width="520" height="360" fill="#5d7d96"/>
+      <rect y="210" width="520" height="150" fill="#3b4a55"/>
+      <g data-d="300"><rect x="350" y="180" width="70" height="30" rx="8" fill="#2a3138"/><rect x="371" y="200" width="28" height="9" fill="#f3d34a"/><rect class="veil" filter="url(#soft)" x="340" y="170" width="90" height="50" fill="#d9e1e6" opacity="0"/><text x="385" y="236" text-anchor="middle" font-size="14" fill="#e8eef2">300 m</text></g>
+      <g data-d="150"><rect x="190" y="185" width="130" height="58" rx="14" fill="#2a3138"/><rect x="232" y="222" width="46" height="15" fill="#f3d34a"/><rect class="veil" filter="url(#soft)" x="180" y="175" width="150" height="78" fill="#d9e1e6" opacity="0"/><text x="255" y="272" text-anchor="middle" font-size="14" fill="#e8eef2">150 m</text></g>
+      <g data-d="50"><rect x="20" y="200" width="200" height="100" rx="22" fill="#2a3138"/><rect x="85" y="262" width="70" height="24" fill="#f3d34a"/><rect class="veil" filter="url(#soft)" x="10" y="190" width="220" height="120" fill="#d9e1e6" opacity="0"/><text x="120" y="330" text-anchor="middle" font-size="14" fill="#e8eef2">50 m</text></g>
+    </svg>
+  </div>
+  <div class="src"><span>來源 S5（Koschmieder 模型、5 種 β）</span><span>Wiki：<b>C1 · S5</b></span></div>
+</section>
+
+<!-- 6 影響多大 -->
+<section class="slide" data-wiki="concepts/weather-effects.md sources/S4-hnewa-rain-review.md" data-src="S4">
+  <p class="kicker">// 有多嚴重？</p>
+  <h2>一下雨，偵測準確度就掉了</h2>
+  <p class="lead" style="font-size:21px">指標：<dfn title="mean Average Precision：同時考慮「框得準不準」與「有沒有漏掉」的綜合分數，越高越好">mAP</dfn>（越高越好），資料：BDD100K 真實駕駛影像</p>
+  <div class="bars" data-max="60">
+    <div class="bar base" data-v="44.45"><span>Faster R-CNN · 晴天</span><div class="track"><div class="fill"></div></div><span class="v">44.45</span></div>
+    <div class="bar bad" data-v="39.00"><span>Faster R-CNN · 雨天</span><div class="track"><div class="fill"></div></div><span class="v">39.00</span></div>
+    <div class="bar base" data-v="52.62"><span>YOLOv3 · 晴天</span><div class="track"><div class="fill"></div></div><span class="v">52.62</span></div>
+    <div class="bar bad" data-v="49.39"><span>YOLOv3 · 雨天</span><div class="track"><div class="fill"></div></div><span class="v">49.39</span></div>
+  </div>
+  <div class="callout bad" style="margin-top:22px">而且<strong>行人、紅綠燈</strong>這種小東西掉最多——對自駕車最危險。</div>
+  <div class="src"><span>來源 S4 Hnewa &amp; Radha</span><span>Wiki：<b>C1 · S4</b></span></div>
+</section>
+
+<!-- 7 四條路線 -->
+<section class="slide" data-wiki="index.md" data-src="">
+  <p class="kicker">// 地圖</p>
+  <h2>研究者想出的四條路</h2>
+  <div class="grid4" style="margin-bottom:24px">
+    <div class="card"><span class="tag">路線一</span><h3 style="margin-top:10px">🧽 先修圖</h3><p>去雨、去霧後再偵測</p></div>
+    <div class="card"><span class="tag">路線二</span><h3 style="margin-top:10px">🎛️ 邊修邊學</h3><p>修圖模組和偵測器一起訓練</p></div>
+    <div class="card"><span class="tag">路線三</span><h3 style="margin-top:10px">🗂️ 從資料下手</h3><p>合成天氣、收集真實資料</p></div>
+    <div class="card"><span class="tag">路線四</span><h3 style="margin-top:10px">🌡️ 換一雙眼睛</h3><p>改用<dfn title="拍攝物體自身發出的熱（長波紅外線），不需要光">熱成像</dfn>等感測器</p></div>
+  </div>
+  <p class="muted">接下來每條路各看一個證據：<strong>它有用嗎？代價是什麼？</strong></p>
+  <div class="src"><span>對應 Wiki 概念頁 C2~C5</span><span>Wiki：<b>index.md</b></span></div>
+</section>
+
+<!-- 8 路線一 -->
+<section class="slide" data-wiki="concepts/restoration-first.md sources/S4-hnewa-rain-review.md" data-src="S4 S5">
+  <p class="kicker">// 路線一：先修圖再偵測</p>
+  <h2>揭曉：去雨之後，反而更不準</h2>
+  <div class="grid2">
+    <div class="bars" data-max="55">
+      <div class="bar base" data-v="49.39"><span>雨天（不處理）</span><div class="track"><div class="fill"></div></div><span class="v">49.39</span></div>
+      <div class="bar bad" data-v="47.94"><span>+ DDN 去雨</span><div class="track"><div class="fill"></div></div><span class="v">47.94</span></div>
+      <div class="bar bad" data-v="46.66"><span>+ DeRaindrop</span><div class="track"><div class="fill"></div></div><span class="v">46.66</span></div>
+      <div class="bar bad" data-v="44.36"><span>+ PReNet</span><div class="track"><div class="fill"></div></div><span class="v">44.36</span></div>
+      <p class="muted small">YOLOv3 在 BDD100K 雨天的 mAP（S4）</p>
+    </div>
+    <div>
+      <h3>為什麼？</h3>
+      <ul class="clean">
+        <li>修圖的目標是「人看起來清楚」，不是「AI 好認」</li>
+        <li>修圖時把物體<strong>邊緣也磨平</strong>了</li>
+        <li>修圖模型用合成雨訓練，遇到真雨就失準</li>
+      </ul>
+      <div class="callout" style="margin-top:14px">霧也一樣：去霧前處理沒有一致的幫助（S5）。<br><strong>看起來清楚 ≠ 偵測準確</strong></div>
+    </div>
+  </div>
+  <div class="src"><span>來源 S4 S5</span><span>Wiki：<b>C2 先修圖再偵測</b></span></div>
+</section>
+
+<!-- 9 路線二 -->
+<section class="slide" data-wiki="concepts/adaptive-enhancement.md sources/S2-ia-yolo.md" data-src="S2 S6">
+  <p class="kicker">// 路線二：讓偵測器自己學修圖</p>
+  <h2>IA-YOLO：修圖的目標改成「讓偵測更準」</h2>
+  <p class="small" style="margin:-10px 0 8px"><dfn title="Differentiable Image Processing：可以和神經網路一起訓練的修圖濾鏡（去霧、白平衡、對比…）">DIP</dfn> 是可訓練的修圖濾鏡；<dfn title="一個小型 CNN，看縮圖後決定每個濾鏡要開多強">CNN-PP</dfn> 決定每張圖要修多少；兩者和 YOLOv3 一起訓練。</p>
+  <svg viewBox="0 0 1136 150" role="img" aria-label="流程：輸入影像、CNN-PP 預測參數、DIP 濾鏡、YOLOv3，偵測損失回傳訓練全部">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#93a4b0"/></marker></defs>
+    <g font-family="Noto Sans TC" font-size="19" fill="#e8eef2" text-anchor="middle">
+      <rect x="0" y="40" width="170" height="70" rx="10" fill="#1a252e" stroke="#2b3a46"/><text x="85" y="82">霧／暗的影像</text>
+      <rect x="250" y="0" width="210" height="60" rx="10" fill="#1a252e" stroke="#ffb547"/><text x="355" y="36">CNN-PP 決定參數</text>
+      <rect x="250" y="90" width="210" height="60" rx="10" fill="#1a252e" stroke="#ffb547"/><text x="355" y="126">DIP 6 個濾鏡</text>
+      <rect x="560" y="40" width="190" height="70" rx="10" fill="#1a252e" stroke="#4fe0a0"/><text x="655" y="82">YOLOv3</text>
+      <rect x="840" y="40" width="200" height="70" rx="10" fill="#1a252e" stroke="#2b3a46"/><text x="940" y="82">偵測結果</text>
+    </g>
+    <g stroke="#93a4b0" stroke-width="2" fill="none">
+      <path d="M170,75 H210 V30 H246" marker-end="url(#ar)"/><path d="M210,75 V120 H246" marker-end="url(#ar)"/>
+      <path d="M355,60 V86" marker-end="url(#ar)"/><path d="M460,120 H510 V75 H556" marker-end="url(#ar)"/><path d="M750,75 H836" marker-end="url(#ar)"/>
+    </g>
+  </svg>
+  <table style="margin-top:12px">
+    <tr><th>測試資料（mAP）</th><th>原始 YOLOv3</th><th>IA-YOLO</th></tr>
+    <tr><td>合成霧（VOC_Foggy）</td><td class="num">31.05</td><td class="num" style="color:var(--good)">72.03</td></tr>
+    <tr><td>真實霧（<dfn title="一個收集真實霧天照片的測試資料集">RTTS</dfn>）</td><td class="num">28.82</td><td class="num" style="color:var(--good)">37.08</td></tr>
+    <tr><td>真實夜間（ExDark）</td><td class="num">36.42</td><td class="num" style="color:var(--good)">40.37</td></tr>
+  </table>
+  <p class="small muted" style="margin:10px 0 0">代價：每張圖多約 13 ms。後續的 ERUP-YOLO 改用通用濾鏡，雪天進步很多，但<strong>沙塵反而變差</strong>（S6）。</p>
+  <div class="src"><span>來源 S2 S6</span><span>Wiki：<b>C3 讓偵測器自己學修圖</b></span></div>
+</section>
+
+<!-- 10 路線三 -->
+<section class="slide" data-wiki="concepts/synthetic-vs-real.md" data-src="S2 S3 S4 S5">
+  <p class="kicker">// 路線三：從資料下手</p>
+  <h2>真實壞天氣的照片太少，怎麼辦？</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>🧪 合成：在晴天照片上「加天氣」</h3>
+      <p>用霧的公式加霧（S5）：真實霧天的分割準確度（<dfn title="mean Intersection over Union：預測區域和正確區域重疊的平均比例">mIoU</dfn>）34.9% → 37.8%。</p>
+      <p>IA-YOLO 讓 2/3 的訓練圖加上霧或變暗（S2）。</p>
+      <p class="muted">便宜、量大，但和真實天氣有落差。</p>
+    </div>
+    <div class="card">
+      <h3>📷 真實：收集並標註</h3>
+      <p>DAWN：1,000 張真實霧、雪、雨、沙塵交通照片，7,845 個框（S3）。</p>
+      <p>Foggy Driving：101 張真實霧天照片，只用來測試（S5）。</p>
+      <p class="muted">貴、慢，但最可信。</p>
+    </div>
+  </div>
+  <div class="callout good" style="margin-top:20px">常見做法：<strong>合成資料拿來訓練，真實資料拿來測試。</strong>作者甚至認為「缺資料」才是最根本的問題（S4）。</div>
+  <div class="src"><span>來源 S2 S3 S4 S5</span><span>Wiki：<b>C4 合成 vs 真實資料</b></span></div>
+</section>
+
+<!-- 11 路線四 -->
+<section class="slide" data-wiki="concepts/thermal-sensing.md sources/S1-kristo-thermal-yolo.md" data-src="S1">
+  <p class="kicker">// 路線四：換一雙眼睛</p>
+  <h2>熱成像：看的是「熱」，不是光</h2>
+  <div class="grid2">
+    <div>
+      <p>一般相機需要光；熱成像（長波紅外線）拍的是物體自己發出的熱，所以夜晚、霧、雨中都看得到人。</p>
+      <div class="bars" data-max="100">
+        <div class="bar bad" data-v="19.63"><span>RGB 預訓練直接用</span><div class="track"><div class="fill"></div></div><span class="v">19.63</span></div>
+        <div class="bar base" data-v="79.39"><span>只用晴天熱影像訓練</span><div class="track"><div class="fill"></div></div><span class="v">79.39</span></div>
+        <div class="bar good" data-v="97.93"><span>熱影像（含各天氣）訓練</span><div class="track"><div class="fill"></div></div><span class="v">97.93</span></div>
+      </div>
+      <p class="muted small">夜間行人偵測 <dfn title="Average Precision：單一類別的偵測分數；多個類別平均就是 mAP">AP</dfn>（%），YOLOv3（S1）</p>
+    </div>
+    <div>
+      <h3>要注意</h3>
+      <ul class="clean">
+        <li>換了感測器，<strong>模型也要重新訓練</strong></li>
+        <li>霧的影響比雨大</li>
+        <li>只在一個地點、冬天夜晚測試</li>
+        <li>車牌的字沒有溫差，熱影像可能<strong>讀不出車牌</strong>（待查證）</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src"><span>來源 S1 Kristo et al.</span><span>Wiki：<b>C5 熱成像</b></span></div>
+</section>
+
+<!-- 12 如何評估 -->
+<section class="slide" data-wiki="concepts/evaluation.md" data-src="S2 S4 S6">
+  <p class="kicker">// 怎麼知道真的有變好？</p>
+  <h2>公平評估的 4 個原則</h2>
+  <div class="grid4">
+    <div class="card"><h3>① 分天氣報告</h3><p>晴、雨、霧、夜各算一次，不要只給平均</p></div>
+    <div class="card"><h3>② 晴天也要測</h3><p>改善雨天，不能讓晴天變差</p></div>
+    <div class="card"><h3>③ 用真實照片測</h3><p>只測合成資料會太樂觀</p></div>
+    <div class="card"><h3>④ 報告速度</h3><p>修圖模組會多花時間</p></div>
+  </div>
+  <div class="callout bad" style="margin-top:24px">⚠ 陷阱：同一個 YOLOv3 在 RTTS 上，一篇論文報 <span class="mono">28.82</span>，另一篇報 <span class="mono">49.01</span>。設定不同的數字<strong>不能放在一起比</strong>。</div>
+  <div class="src"><span>來源 S2 S4 S6</span><span>Wiki：<b>C6 如何評估</b></span></div>
+</section>
+
+<!-- 13 和我的研究 -->
+<section class="slide" data-wiki="concepts/evaluation.md concepts/weather-effects.md" data-src="自己的實驗">
+  <p class="kicker">// 和我的研究有什麼關係</p>
+  <h2>車牌：又小、又要讀字</h2>
+  <div class="grid2">
+    <div>
+      <p>我在自己做的「車牌辨識實驗室」用一般 <dfn title="Optical Character Recognition：把影像中的文字讀成文字">OCR</dfn>（文字辨識）測了 4 張車牌：</p>
+      <table>
+        <tr><th>情況</th><th>結果</th></tr>
+        <tr><td>清楚、正拍（2 張）</td><td style="color:var(--good)">✓ 完全正確</td></tr>
+        <tr><td>夜間、傾斜（2 張）</td><td style="color:var(--bad)">✗ M→N、K→X、Q 不見</td></tr>
+      </table>
+      <p style="margin-top:14px">整串正確 <span class="big" style="font-size:40px">50%</span>　字元正確 <span class="big" style="font-size:40px">86%</span></p>
+    </div>
+    <div class="card">
+      <h3>從四條路得到的啟示</h3>
+      <ul class="clean small" style="font-size:19px">
+        <li>不要只靠「先修圖」</li>
+        <li>修圖要和辨識一起訓練</li>
+        <li>收集台灣／越南真實雨夜車牌當測試集</li>
+        <li>結果依天氣分組報告</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src"><span>自己的實驗（非文獻）</span><span>Wiki：<b>C1 · C6</b></span></div>
+</section>
+
+<!-- 14 小測驗 -->
+<section class="slide quiz" data-wiki="concepts/restoration-first.md concepts/synthetic-vs-real.md concepts/evaluation.md" data-src="S4 S5 S6">
+  <p class="kicker">// 小測驗</p>
+  <h2>檢查一下你懂了沒</h2>
+  <div class="q"><p style="margin:0">1. 先把雨去掉再偵測，一定會更準？</p>
+    <div class="opts" data-ans="1"><button>對</button><button>不一定，可能更差</button></div>
+    <p class="why" data-why="雨天研究中，三種去雨方法都讓 YOLOv3 的 mAP 下降。"></p></div>
+  <div class="q"><p style="margin:0">2. 合成霧的照片最適合拿來做什麼？</p>
+    <div class="opts" data-ans="0"><button>補充訓練資料</button><button>當最終測試集</button></div>
+    <p class="why" data-why="合成資料便宜量大適合訓練；測試要用真實照片，否則會太樂觀。"></p></div>
+  <div class="q"><p style="margin:0">3. 兩篇論文的 YOLOv3 分數差很多，可以直接比嗎？</p>
+    <div class="opts" data-ans="1"><button>可以</button><button>不行，設定不同</button></div>
+    <p class="why" data-why="只比較同一篇論文、同一設定下的數字。"></p></div>
+  <div class="src"><span>點選答案看解析</span><span>Wiki：<b>C2 · C4 · C6</b></span></div>
+</section>
+
+<!-- 15 總結 + 參考 -->
+<section class="slide" data-wiki="index.md sources/S1-kristo-thermal-yolo.md sources/S2-ia-yolo.md sources/S3-dawn-dataset.md sources/S4-hnewa-rain-review.md sources/S5-foggy-cityscapes.md sources/S6-erup-yolo.md" data-src="S1 S2 S3 S4 S5 S6">
+  <p class="kicker">// 總結</p>
+  <h2>帶走三句話</h2>
+  <ul class="clean" style="margin-bottom:16px">
+    <li>惡劣天氣破壞<strong>對比與邊緣</strong>，小物件最先受害</li>
+    <li><strong>看起來清楚 ≠ 偵測準確</strong>：修圖要以偵測為目標</li>
+    <li>用<strong>真實天氣、分組</strong>的方式評估，才知道真的有進步</li>
+  </ul>
+  <p class="muted small" style="margin:0 0 4px">參考資料（皆整理於 Wiki）</p>
+  <ol class="small muted" style="margin:0;padding-left:22px;line-height:1.45;columns:2;column-gap:32px">
+    <li>S1 Kristo et al., IEEE Access, 2020（熱成像 + YOLO）</li>
+    <li>S2 Liu et al., arXiv:2112.08088（IA-YOLO）</li>
+    <li>S3 Kenk &amp; Hassaballah, arXiv:2008.05402（DAWN）</li>
+    <li>S4 Hnewa &amp; Radha, IEEE SPM（雨天回顧）</li>
+    <li>S5 Sakaridis et al., arXiv:1708.07819（Foggy Cityscapes）</li>
+    <li>S6 Ogino et al., arXiv:2411.02799（ERUP-YOLO）</li>
+  </ol>
+  <div class="src"><span>謝謝聆聽</span><span>Wiki：<b>index.md</b></span></div>
+</section>
+
+</div></div>
+
+<div id="nav"><button id="prev" aria-label="上一頁">←</button><span id="count"></span><button id="next" aria-label="下一頁">→</button></div>
+<div id="hint">← → / 空白鍵 換頁　F 全螢幕</div>
+
+<script>
+(function(){
+  "use strict";
+  var deck=document.getElementById("deck"), slides=[].slice.call(document.querySelectorAll(".slide")), i=0;
+  function fit(){var s=Math.min((innerWidth-16)/1280,(innerHeight-64)/720);deck.style.transform="scale("+s+")";}
+  function go(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach(function(s,k){s.classList.toggle("on",k===i);});
+    document.getElementById("count").textContent=(i+1)+" / "+slides.length;
+    document.getElementById("progress").style.width=((i+1)/slides.length*100)+"%";
+    try{history.replaceState(null,"","#"+(i+1));}catch(e){}
+    animateBars(slides[i]);
+  }
+  function animateBars(s){
+    [].forEach.call(s.querySelectorAll(".bars"),function(b){
+      var max=parseFloat(b.getAttribute("data-max"));
+      [].forEach.call(b.querySelectorAll(".bar"),function(r){
+        var f=r.querySelector(".fill"); f.style.width="0";
+        setTimeout(function(){f.style.width=(parseFloat(r.getAttribute("data-v"))/max*100)+"%";},60);
+      });
+    });
+  }
+  addEventListener("resize",fit);
+  addEventListener("keydown",function(e){
+    if(["ArrowRight","PageDown"," "].indexOf(e.key)>=0){e.preventDefault();go(i+1);}
+    else if(["ArrowLeft","PageUp"].indexOf(e.key)>=0){e.preventDefault();go(i-1);}
+    else if(e.key==="Home")go(0); else if(e.key==="End")go(slides.length-1);
+    else if(e.key==="f"||e.key==="F"){if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}
+  });
+  document.getElementById("prev").onclick=function(){go(i-1);};
+  document.getElementById("next").onclick=function(){go(i+1);};
+  var tx=null;
+  addEventListener("touchstart",function(e){tx=e.touches[0].clientX;},{passive:true});
+  addEventListener("touchend",function(e){if(tx===null)return;var d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>50)go(i+(d<0?1:-1));tx=null;});
+
+  // 第 2 頁：先猜
+  [].forEach.call(document.querySelectorAll("[data-guess]"),function(b){
+    b.onclick=function(){document.getElementById("guess-msg").textContent="記住你的答案，第 8 頁揭曉！";};
+  });
+  // 第 5 頁：霧模擬（t = e^(−β·距離)）
+  var betas=document.getElementById("betas");
+  function setBeta(btn){
+    [].forEach.call(betas.children,function(x){x.classList.toggle("on",x===btn);});
+    var b=parseFloat(btn.getAttribute("data-b"));
+    document.getElementById("mor").textContent=Math.round(2.996/b)+" m";
+    [].forEach.call(document.querySelectorAll("#fogscene g[data-d]"),function(g){
+      var t=Math.exp(-b*parseFloat(g.getAttribute("data-d")));
+      g.querySelector(".veil").setAttribute("opacity",(1-t).toFixed(2));
+    });
+  }
+  [].forEach.call(betas.children,function(btn){btn.onclick=function(){setBeta(btn);};});
+  setBeta(betas.children[2]);
+  // 第 14 頁：測驗
+  [].forEach.call(document.querySelectorAll(".quiz .opts"),function(o){
+    var ans=+o.getAttribute("data-ans"), why=o.parentNode.querySelector(".why");
+    [].forEach.call(o.children,function(btn,k){
+      btn.onclick=function(){
+        [].forEach.call(o.children,function(x){x.classList.remove("right","wrong");});
+        btn.classList.add(k===ans?"right":"wrong");
+        why.textContent=(k===ans?"✓ 正確。":"✗ 再想想。")+why.getAttribute("data-why");
+      };
+    });
+  });
+  fit();
+  var start=parseInt((location.hash||"#1").slice(1),10);
+  go(isNaN(start)?0:start-1);
+})();
+</script>
+</body>
+</html>
